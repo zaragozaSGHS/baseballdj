@@ -42,8 +42,7 @@
         
         const player = {
             name: playerName,
-            audio: null,
-            gainNode: audioContext.createGain(), // For volume control
+            audioBuffer: null,
         };
         
         players.push(player);
@@ -55,18 +54,19 @@
         playerList.innerHTML = "";
         players.forEach((player, index) => {
             const listItem = document.createElement("li");
-            listItem.textContent = player.name;
+            listItem.textContent = player.name + " ";
             
             // Play button
             const playBtn = document.createElement("button");
             playBtn.textContent = "Play";
             playBtn.onclick = () => playAudio(index);
+            playBtn.disabled = !player.audioBuffer;
             
             // Upload button
             const uploadBtn = document.createElement("input");
             uploadBtn.type = "file";
             uploadBtn.accept = "audio/*";
-            uploadBtn.onchange = (event) => loadAudio(event, index);
+            uploadBtn.onchange = (event) => loadAudio(event, index, playBtn);
             
             listItem.appendChild(playBtn);
             listItem.appendChild(uploadBtn);
@@ -75,14 +75,22 @@
     }
 
     // Load audio file for a player
-    function loadAudio(event, index) {
+    function loadAudio(event, index, playBtn) {
         const file = event.target.files[0];
-        if (!file) return;
+        if (!file) {
+            alert("No file selected.");
+            return;
+        }
 
         const reader = new FileReader();
         reader.onload = function(e) {
             audioContext.decodeAudioData(e.target.result, (buffer) => {
-                players[index].audio = buffer;
+                players[index].audioBuffer = buffer;
+                playBtn.disabled = false; // Enable play button after file loads
+                console.log(`Audio loaded for ${players[index].name}`);
+            }, (error) => {
+                console.error("Error decoding audio", error);
+                alert("Error loading audio file. Try another format.");
             });
         };
         reader.readAsArrayBuffer(file);
@@ -90,22 +98,26 @@
 
     // Play audio with fade-in and fade-out effect
     function playAudio(index) {
-        if (!players[index].audio) return;
-        
+        if (!players[index].audioBuffer) {
+            alert("No audio loaded for this player.");
+            return;
+        }
+
         const source = audioContext.createBufferSource();
-        source.buffer = players[index].audio;
-        source.connect(players[index].gainNode);
-        players[index].gainNode.connect(audioContext.destination);
+        source.buffer = players[index].audioBuffer;
+        const gainNode = audioContext.createGain();
+        source.connect(gainNode);
+        gainNode.connect(audioContext.destination);
         
         // Apply fade-in effect
-        players[index].gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        players[index].gainNode.gain.linearRampToValueAtTime(1, audioContext.currentTime + 1);
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(1, audioContext.currentTime + 1);
         
         source.start(0);
         
         // Apply fade-out effect
         source.onended = () => {
-            players[index].gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 1);
+            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 1);
         };
     }
 
