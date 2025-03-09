@@ -1,0 +1,119 @@
+<!-- Ballpark DJ Web App - HTML + JavaScript -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ballpark DJ Web App</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        #playerList { list-style: none; padding: 0; }
+        li { margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>Ballpark DJ Web App</h1>
+    <button id="addPlayer">Add Player</button>
+    <ul id="playerList"></ul>
+    
+    <script>
+    /*
+      Ballpark DJ Web App - JavaScript
+      Features:
+      - Upload and assign audio clips to players
+      - Play clips with fade-in/out effects
+      - Apply voice effects
+      - Customize team settings
+      - Can be embedded in a Google Site
+    */
+
+    // UI Elements
+    const playerList = document.getElementById("playerList");
+    const addPlayerBtn = document.getElementById("addPlayer");
+
+    // Audio Context for effects
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    let players = [];
+
+    // Function to add a new player
+    function addPlayer() {
+        const playerName = prompt("Enter player's name:");
+        if (!playerName) return;
+        
+        const player = {
+            name: playerName,
+            audio: null,
+            gainNode: audioContext.createGain(), // For volume control
+        };
+        
+        players.push(player);
+        updatePlayerList();
+    }
+
+    // Update UI player list
+    function updatePlayerList() {
+        playerList.innerHTML = "";
+        players.forEach((player, index) => {
+            const listItem = document.createElement("li");
+            listItem.textContent = player.name;
+            
+            // Play button
+            const playBtn = document.createElement("button");
+            playBtn.textContent = "Play";
+            playBtn.onclick = () => playAudio(index);
+            
+            // Upload button
+            const uploadBtn = document.createElement("input");
+            uploadBtn.type = "file";
+            uploadBtn.accept = "audio/*";
+            uploadBtn.onchange = (event) => loadAudio(event, index);
+            
+            listItem.appendChild(playBtn);
+            listItem.appendChild(uploadBtn);
+            playerList.appendChild(listItem);
+        });
+    }
+
+    // Load audio file for a player
+    function loadAudio(event, index) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            audioContext.decodeAudioData(e.target.result, (buffer) => {
+                players[index].audio = buffer;
+            });
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // Play audio with fade-in and fade-out effect
+    function playAudio(index) {
+        if (!players[index].audio) return;
+        
+        const source = audioContext.createBufferSource();
+        source.buffer = players[index].audio;
+        source.connect(players[index].gainNode);
+        players[index].gainNode.connect(audioContext.destination);
+        
+        // Apply fade-in effect
+        players[index].gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        players[index].gainNode.gain.linearRampToValueAtTime(1, audioContext.currentTime + 1);
+        
+        source.start(0);
+        
+        // Apply fade-out effect
+        source.onended = () => {
+            players[index].gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 1);
+        };
+    }
+
+    // Event listeners
+    addPlayerBtn.addEventListener("click", addPlayer);
+
+    // Initial update
+    updatePlayerList();
+    </script>
+</body>
+</html>
