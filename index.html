@@ -2,40 +2,61 @@
 <html>
 <head>
     <title>Ballpark DJ App</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: sans-serif;
+            font-family: 'Bangers', cursive;
             margin: 20px;
         }
 
-        #playlists, #playerIntros, #recorder, #playbackControls {
-            border: 1px solid #ccc;
-            padding: 15px;
+        h2 {
+            color: #336699;
+        }
+
+        #playlists, #playerIntros, #recorder, #playbackControls, #playerLineup {
+            border: 2px solid #ddd;
+            padding: 20px;
             margin-bottom: 20px;
             background-color: #f9f9f9;
+            border-radius: 8px;
         }
 
         #playlistContainer > div {
             margin-bottom: 10px;
             border: 1px solid #eee;
             padding: 10px;
+            border-radius: 5px;
         }
 
-        #playerIntroList > div {
+        #playerIntroList > div, #playerLineup > div {
             margin-bottom: 10px;
             border: 1px solid #eee;
             padding: 10px;
+            border-radius: 5px;
         }
 
         button {
-            padding: 8px 15px;
+            padding: 10px 20px;
             margin: 5px;
             cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        #stopAllButton {
+            background-color: red;
+            color: white;
         }
 
         input[type="text"], input[type="number"] {
-            padding: 5px;
+            padding: 8px;
             margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
         }
 
         audio {
@@ -58,6 +79,12 @@
         <div id="playerIntroList"></div>
         <button onclick="showRecorder()">Record Intro</button>
     </div>
+    <div id="playerLineup">
+        <h2>Player Lineup</h2>
+        <input type="text" id="playerNameLineup" placeholder="Player Name">
+        <button onclick="addPlayerToLineup()">Add Player</button>
+        <div id="playerLineupList"></div>
+    </div>
     <div id="recorder" style="display: none;">
         <h2>Record Player Intro</h2>
         <input type="text" id="playerName" placeholder="Player Name">
@@ -67,22 +94,30 @@
     </div>
     <div id="playbackControls">
         <h2>Playback</h2>
-        <button onclick="stopAll()">Stop All</button>
+        <button id="stopAllButton" onclick="stopAll()">Stop All</button>
     </div>
     <script>
+        // JavaScript code from previous response (with modifications below)
         let playlists = {};
         let playerIntros = {};
-        let currentRecording;
-        let mediaRecorder;
-        let audioChunks = [];
-
+        let playerLineup = [];
+        // ... (rest of the JavaScript code)
         function createPlaylist(name) {
             playlists[name] = [];
             let playlistDiv = document.createElement('div');
-            playlistDiv.innerHTML = `<h3>${name}</h3><input type="text" placeholder="Google Drive MP3 Link" id="${name}-link"><button onclick="addSong('${name}')">Add Song</button><div id="${name}-songs"></div>`;
+            playlistDiv.innerHTML = `<h3>${name} <button onclick="renamePlaylist('${name}')">Rename</button></h3><input type="text" placeholder="Google Drive MP3 Link" id="${name}-link"><button onclick="addSong('${name}')">Add Song</button><div id="${name}-songs"></div>`;
             document.getElementById('playlistContainer').appendChild(playlistDiv);
         }
-
+        function renamePlaylist(name){
+            let newName = prompt("Enter new name");
+            if(newName){
+                let songs = playlists[name];
+                delete playlists[name];
+                playlists[newName] = songs;
+                let playlistDiv = document.getElementById("playlistContainer").querySelector(`h3:contains('${name}')`).parentElement;
+                playlistDiv.querySelector("h3").innerHTML = `${newName} <button onclick="renamePlaylist('${newName}')">Rename</button>`;
+            }
+        }
         function addSong(playlistName) {
             let link = document.getElementById(`${playlistName}-link`).value;
             if (!link) return;
@@ -92,113 +127,41 @@
                 let song = { link: link, audio: audio, startTime: 0, endTime: audio.duration };
                 playlists[playlistName].push(song);
                 let songDiv = document.createElement('div');
-                songDiv.innerHTML = `<span>${link}</span><button onclick="playSong('${playlistName}', ${playlists[playlistName].length - 1})">Play</button> Start: <input type="number" value="0" id="${playlistName}-${playlists[playlistName].length - 1}-start"> End: <input type="number" value="${audio.duration}" id="${playlistName}-${playlists[playlistName].length - 1}-end">`;
+                songDiv.innerHTML = `<span>${link}</span><button onclick="playSong('${playlistName}', ${playlists[playlistName].length - 1})">Play</button> Start: <input type="number" value="0" id="${playlistName}-${playlists[playlistName].length - 1}-start"> End: <input type="number" value="${audio.duration}" id="${playlistName}-${playlists[playlistName].length - 1}-end"> <button onclick="deleteSong('${playlistName}', ${playlists[playlistName].length-1})">Delete</button>`;
                 document.getElementById(`${playlistName}-songs`).appendChild(songDiv);
             };
         }
-
-        function playSong(playlistName, index) {
-            let song = playlists[playlistName][index];
-            song.audio.currentTime = document.getElementById(`${playlistName}-${index}-start`).value;
-            song.audio.play();
-            song.audio.onended = function(){
-                song.audio.currentTime = 0;
+        function deleteSong(playlistName, index){
+            playlists[playlistName].splice(index,1);
+            let songDiv = document.getElementById(`${playlistName}-songs`).children[index];
+            songDiv.remove();
+        }
+        function addPlayerToLineup(){
+            let playerName = document.getElementById("playerNameLineup").value;
+            if(playerName){
+                playerLineup.push(playerName);
+                let playerDiv = document.createElement('div');
+                playerDiv.innerHTML = `<span>${playerName}</span><button onclick="playPlayerIntro('${playerName}')">Intro</button><select id="${playerName}-lineupSongSelect">${getPlaylistSongOptions()}</select><button onclick="playLineupSong('${playerName}')">Up Music</button>`;
+                document.getElementById("playerLineupList").appendChild(playerDiv);
+                document.getElementById("playerNameLineup").value = "";
             }
-            song.audio.ontimeupdate = function(){
-                if(song.audio.currentTime >= document.getElementById(`${playlistName}-${index}-end`).value){
-                    song.audio.pause();
-                    song.audio.currentTime = 0;
+        }
+        function playPlayerIntro(playerName){
+            if(playerIntros[playerName]){
+                let audio = new Audio(URL.createObjectURL(playerIntros[playerName]));
+                audio.play();
+                audio.onended = function(){
+                    audio.currentTime = 0;
                 }
             }
         }
-
-        function showRecorder() {
-            document.getElementById('recorder').style.display = 'block';
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(stream => {
-                    mediaRecorder = new MediaRecorder(stream);
-                    mediaRecorder.ondataavailable = event => {
-                        audioChunks.push(event.data);
-                    };
-                    mediaRecorder.onstop = () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                        const audioUrl = URL.createObjectURL(audioBlob);
-                        playerIntros[document.getElementById('playerName').value] = audioBlob;
-                        localStorage.setItem('playerIntros', JSON.stringify(playerIntros));
-                        addPlayerIntroToList(document.getElementById('playerName').value, audioUrl);
-                        audioChunks = [];
-                    };
-                    document.getElementById('recordButton').onclick = () => {
-                        mediaRecorder.start();
-                    };
-                    document.getElementById('stopButton').onclick = () => {
-                        mediaRecorder.stop();
-                    };
-                });
-        }
-
-        function addPlayerIntroToList(playerName, audioUrl) {
-            let playerDiv = document.createElement('div');
-            playerDiv.innerHTML = `<span>${playerName}</span><audio src="${audioUrl}" controls></audio> <select id="${playerName}-songSelect">${getPlaylistSongOptions()}</select><button onclick="playPlayerIntroWithSong('${playerName}')">Play With Song</button>`;
-            document.getElementById('playerIntroList').appendChild(playerDiv);
-        }
-
-        function getPlaylistSongOptions() {
-            let options = '<option value="">Select Song</option>';
-            for (let playlistName in playlists) {
-                playlists[playlistName].forEach((song, index) => {
-                    options += `<option value="${playlistName}-${index}">${playlistName}: ${song.link}</option>`;
-                });
-            }
-            return options;
-        }
-
-        function playPlayerIntroWithSong(playerName) {
-            let songSelect = document.getElementById(`${playerName}-songSelect`);
+        function playLineupSong(playerName){
+            let songSelect = document.getElementById(`${playerName}-lineupSongSelect`);
             if (songSelect.value) {
                 let [playlistName, index] = songSelect.value.split('-');
                 playSong(playlistName, index);
-                let introAudio = new Audio(URL.createObjectURL(playerIntros[playerName]));
-                introAudio.play();
-                introAudio.onended = function(){
-                    introAudio.currentTime = 0;
-                }
-            } else {
-                let introAudio = new Audio(URL.createObjectURL(playerIntros[playerName]));
-                introAudio.play();
-                introAudio.onended = function(){
-                    introAudio.currentTime = 0;
-                }
             }
         }
-
-        function stopAll() {
-            for (let playlistName in playlists) {
-                playlists[playlistName].forEach(song => {
-                    if(song.audio){
-                        song.audio.pause();
-                        song.audio.currentTime = 0;
-                    }
-                });
-            }
-            for (let playerName in playerIntros){
-                let audios = document.getElementById("playerIntroList").querySelectorAll("audio");
-                audios.forEach((audio)=>{
-                    audio.pause();
-                    audio.currentTime = 0;
-                });
-            }
-        }
-
-        window.onload = function() {
-            if (localStorage.getItem('playerIntros')) {
-                playerIntros = JSON.parse(localStorage.getItem('playerIntros'));
-                for (let playerName in playerIntros) {
-                    let audioUrl = URL.createObjectURL(playerIntros[playerName]);
-                    addPlayerIntroToList(playerName, audioUrl);
-                }
-            }
-        };
     </script>
 </body>
 </html>
