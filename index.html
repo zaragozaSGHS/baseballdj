@@ -1,131 +1,204 @@
-<!-- Ballpark DJ Web App - HTML + JavaScript -->
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ballpark DJ Web App</title>
+    <title>Ballpark DJ App</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; }
-        #playerList { list-style: none; padding: 0; }
-        li { margin: 10px 0; }
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        #playlists, #playerIntros, #recorder, #playbackControls {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+
+        #playlistContainer > div {
+            margin-bottom: 10px;
+            border: 1px solid #eee;
+            padding: 10px;
+        }
+
+        #playerIntroList > div {
+            margin-bottom: 10px;
+            border: 1px solid #eee;
+            padding: 10px;
+        }
+
+        button {
+            padding: 8px 15px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        input[type="text"], input[type="number"] {
+            padding: 5px;
+            margin: 5px;
+        }
+
+        audio {
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
-    <h1>Ballpark DJ Web App</h1>
-    <button id="addPlayer">Add Player</button>
-    <ul id="playerList"></ul>
-    
+    <div id="playlists">
+        <h2>Playlists</h2>
+        <button onclick="createPlaylist('Pregame')">Pregame</button>
+        <button onclick="createPlaylist('Intermission')">Intermission</button>
+        <button onclick="createPlaylist('Sound Effects')">Sound Effects</button>
+        <button onclick="createPlaylist('Organ Music')">Organ Music</button>
+        <button onclick="createPlaylist('Pitching Changes')">Pitching Changes</button>
+        <div id="playlistContainer"></div>
+    </div>
+    <div id="playerIntros">
+        <h2>Player Intros</h2>
+        <div id="playerIntroList"></div>
+        <button onclick="showRecorder()">Record Intro</button>
+    </div>
+    <div id="recorder" style="display: none;">
+        <h2>Record Player Intro</h2>
+        <input type="text" id="playerName" placeholder="Player Name">
+        <button id="recordButton">Record</button>
+        <button id="stopButton">Stop</button>
+        <audio id="recordingPlayback" controls></audio>
+    </div>
+    <div id="playbackControls">
+        <h2>Playback</h2>
+        <button onclick="stopAll()">Stop All</button>
+    </div>
     <script>
-    /*
-      Ballpark DJ Web App - JavaScript
-      Features:
-      - Upload and assign audio clips to players
-      - Play clips with fade-in/out effects
-      - Apply voice effects
-      - Customize team settings
-      - Can be embedded in a Google Site
-    */
+        let playlists = {};
+        let playerIntros = {};
+        let currentRecording;
+        let mediaRecorder;
+        let audioChunks = [];
 
-    // UI Elements
-    const playerList = document.getElementById("playerList");
-    const addPlayerBtn = document.getElementById("addPlayer");
-
-    // Audio Context for effects
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    let players = [];
-
-    // Function to add a new player
-    function addPlayer() {
-        const playerName = prompt("Enter player's name:");
-        if (!playerName) return;
-        
-        const player = {
-            name: playerName,
-            audioBuffer: null,
-        };
-        
-        players.push(player);
-        updatePlayerList();
-    }
-
-    // Update UI player list
-    function updatePlayerList() {
-        playerList.innerHTML = "";
-        players.forEach((player, index) => {
-            const listItem = document.createElement("li");
-            listItem.textContent = player.name + " ";
-            
-            // Play button
-            const playBtn = document.createElement("button");
-            playBtn.textContent = "Play";
-            playBtn.onclick = () => playAudio(index);
-            playBtn.disabled = !player.audioBuffer;
-            
-            // Upload button
-            const uploadBtn = document.createElement("input");
-            uploadBtn.type = "file";
-            uploadBtn.accept = "audio/*";
-            uploadBtn.onchange = (event) => loadAudio(event, index, playBtn);
-            
-            listItem.appendChild(playBtn);
-            listItem.appendChild(uploadBtn);
-            playerList.appendChild(listItem);
-        });
-    }
-
-    // Load audio file for a player
-    function loadAudio(event, index, playBtn) {
-        const file = event.target.files[0];
-        if (!file) {
-            alert("No file selected.");
-            return;
+        function createPlaylist(name) {
+            playlists[name] = [];
+            let playlistDiv = document.createElement('div');
+            playlistDiv.innerHTML = `<h3>${name}</h3><input type="text" placeholder="Google Drive MP3 Link" id="${name}-link"><button onclick="addSong('${name}')">Add Song</button><div id="${name}-songs"></div>`;
+            document.getElementById('playlistContainer').appendChild(playlistDiv);
         }
 
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            audioContext.decodeAudioData(e.target.result, (buffer) => {
-                players[index].audioBuffer = buffer;
-                playBtn.disabled = false; // Enable play button after file loads
-                console.log(`Audio loaded for ${players[index].name}`);
-            }, (error) => {
-                console.error("Error decoding audio", error);
-                alert("Error loading audio file. Try another format.");
-            });
-        };
-        reader.readAsArrayBuffer(file);
-    }
+        function addSong(playlistName) {
+            let link = document.getElementById(`${playlistName}-link`).value;
+            if (!link) return;
 
-    // Play audio with fade-in and fade-out effect
-    function playAudio(index) {
-        if (!players[index].audioBuffer) {
-            alert("No audio loaded for this player.");
-            return;
+            let audio = new Audio(link);
+            audio.onloadedmetadata = function() {
+                let song = { link: link, audio: audio, startTime: 0, endTime: audio.duration };
+                playlists[playlistName].push(song);
+                let songDiv = document.createElement('div');
+                songDiv.innerHTML = `<span>${link}</span><button onclick="playSong('${playlistName}', ${playlists[playlistName].length - 1})">Play</button> Start: <input type="number" value="0" id="${playlistName}-${playlists[playlistName].length - 1}-start"> End: <input type="number" value="${audio.duration}" id="${playlistName}-${playlists[playlistName].length - 1}-end">`;
+                document.getElementById(`${playlistName}-songs`).appendChild(songDiv);
+            };
         }
 
-        const source = audioContext.createBufferSource();
-        source.buffer = players[index].audioBuffer;
-        const gainNode = audioContext.createGain();
-        source.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        // Apply fade-in effect
-        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(1, audioContext.currentTime + 1);
-        
-        source.start(0);
-        
-        // Apply fade-out effect
-        source.onended = () => {
-            gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 1);
+        function playSong(playlistName, index) {
+            let song = playlists[playlistName][index];
+            song.audio.currentTime = document.getElementById(`${playlistName}-${index}-start`).value;
+            song.audio.play();
+            song.audio.onended = function(){
+                song.audio.currentTime = 0;
+            }
+            song.audio.ontimeupdate = function(){
+                if(song.audio.currentTime >= document.getElementById(`${playlistName}-${index}-end`).value){
+                    song.audio.pause();
+                    song.audio.currentTime = 0;
+                }
+            }
+        }
+
+        function showRecorder() {
+            document.getElementById('recorder').style.display = 'block';
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        playerIntros[document.getElementById('playerName').value] = audioBlob;
+                        localStorage.setItem('playerIntros', JSON.stringify(playerIntros));
+                        addPlayerIntroToList(document.getElementById('playerName').value, audioUrl);
+                        audioChunks = [];
+                    };
+                    document.getElementById('recordButton').onclick = () => {
+                        mediaRecorder.start();
+                    };
+                    document.getElementById('stopButton').onclick = () => {
+                        mediaRecorder.stop();
+                    };
+                });
+        }
+
+        function addPlayerIntroToList(playerName, audioUrl) {
+            let playerDiv = document.createElement('div');
+            playerDiv.innerHTML = `<span>${playerName}</span><audio src="${audioUrl}" controls></audio> <select id="${playerName}-songSelect">${getPlaylistSongOptions()}</select><button onclick="playPlayerIntroWithSong('${playerName}')">Play With Song</button>`;
+            document.getElementById('playerIntroList').appendChild(playerDiv);
+        }
+
+        function getPlaylistSongOptions() {
+            let options = '<option value="">Select Song</option>';
+            for (let playlistName in playlists) {
+                playlists[playlistName].forEach((song, index) => {
+                    options += `<option value="${playlistName}-${index}">${playlistName}: ${song.link}</option>`;
+                });
+            }
+            return options;
+        }
+
+        function playPlayerIntroWithSong(playerName) {
+            let songSelect = document.getElementById(`${playerName}-songSelect`);
+            if (songSelect.value) {
+                let [playlistName, index] = songSelect.value.split('-');
+                playSong(playlistName, index);
+                let introAudio = new Audio(URL.createObjectURL(playerIntros[playerName]));
+                introAudio.play();
+                introAudio.onended = function(){
+                    introAudio.currentTime = 0;
+                }
+            } else {
+                let introAudio = new Audio(URL.createObjectURL(playerIntros[playerName]));
+                introAudio.play();
+                introAudio.onended = function(){
+                    introAudio.currentTime = 0;
+                }
+            }
+        }
+
+        function stopAll() {
+            for (let playlistName in playlists) {
+                playlists[playlistName].forEach(song => {
+                    if(song.audio){
+                        song.audio.pause();
+                        song.audio.currentTime = 0;
+                    }
+                });
+            }
+            for (let playerName in playerIntros){
+                let audios = document.getElementById("playerIntroList").querySelectorAll("audio");
+                audios.forEach((audio)=>{
+                    audio.pause();
+                    audio.currentTime = 0;
+                });
+            }
+        }
+
+        window.onload = function() {
+            if (localStorage.getItem('playerIntros')) {
+                playerIntros = JSON.parse(localStorage.getItem('playerIntros'));
+                for (let playerName in playerIntros) {
+                    let audioUrl = URL.createObjectURL(playerIntros[playerName]);
+                    addPlayerIntroToList(playerName, audioUrl);
+                }
+            }
         };
-    }
-
-    // Event listeners
-    addPlayerBtn.addEventListener("click", addPlayer);
-
-    // Initial update
-    updatePlayerList();
     </script>
 </body>
 </html>
